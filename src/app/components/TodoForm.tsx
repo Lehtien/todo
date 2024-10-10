@@ -1,23 +1,51 @@
-import { useState } from "react";
+import React from "react";
+import { useRecoilState, useRecoilCallback } from "recoil";
+import { todosState, todoFormState, todoFormErrorState } from "../atoms";
+import { TodoData } from "../types/todo";
+import { createTodo } from "@/utils/api";
+import { v4 as uuidv4 } from "uuid";
 
-interface TodoFormProps {
-  onAdd: (title: string, text: string) => void;
-}
+const TodoForm: React.FC = () => {
+  const [formState, setFormState] = useRecoilState(todoFormState);
+  const [errorText, setErrorText] = useRecoilState(todoFormErrorState);
 
-export function TodoForm({ onAdd }: TodoFormProps) {
-  const [newTodoTitle, setNewTodoTitle] = useState("");
-  const [newTodoText, setNewTodoText] = useState("");
-  const [errorText, setErrorText] = useState("");
+  const addTodo = useRecoilCallback(({ set }) => async (newTodo: TodoData) => {
+    try {
+      const addedTodo = await createTodo(newTodo);
+      set(todosState, (prevTodos) => [...prevTodos, addedTodo]);
+      return addedTodo;
+    } catch (error) {
+      throw error;
+    }
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTodoTitle.trim() === "" || newTodoText.trim() === "") {
-      setErrorText("タイトル及び内容を入力してください");
+    setErrorText("");
+    const { title, text } = formState;
+    if (title.trim() === "" || text.trim() === "") {
+      setErrorText("タイトルと内容は必須です");
       return;
     }
-    onAdd(newTodoTitle.trim(), newTodoText.trim());
-    setNewTodoTitle("");
-    setNewTodoText("");
+    try {
+      const newTodo = {
+        id: uuidv4(),
+        title: title.trim(),
+        text: text.trim(),
+        completed: false,
+      };
+      await addTodo(newTodo);
+      setFormState({ title: "", text: "" });
+    } catch (err) {
+      setErrorText(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormState((prev) => ({ ...prev, [name]: value }));
   };
 
   return (
@@ -25,14 +53,16 @@ export function TodoForm({ onAdd }: TodoFormProps) {
       <div>
         <input
           type="text"
-          value={newTodoTitle}
-          onChange={(e) => setNewTodoTitle(e.target.value)}
+          name="title"
+          value={formState.title}
+          onChange={handleChange}
           placeholder="タイトル"
           className="border border-black p-2 mr-2 w-[300px]"
         />
         <textarea
-          value={newTodoText}
-          onChange={(e) => setNewTodoText(e.target.value)}
+          name="text"
+          value={formState.text}
+          onChange={handleChange}
           placeholder="内容"
           className="border border-black p-2 mr-2 my-2 w-[300px] h-[150px]"
         />
@@ -46,4 +76,6 @@ export function TodoForm({ onAdd }: TodoFormProps) {
       </button>
     </form>
   );
-}
+};
+
+export default TodoForm;
